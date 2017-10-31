@@ -1,0 +1,98 @@
+model {
+  
+  ### model for the unknown feature frequencies ###
+  
+  for(f in 1:nfeat) {
+    INSERT-FEATURE-MODEL-HERE
+  }
+
+  ### model for the unknown parameters of the experts & novices ###
+  
+  global_scale_mu_1 ~ dbeta(1,1)
+  global_scale_mu_2 ~ dgamma(.01,.01)
+  
+  global_scale_tau_1 ~ dgamma(.01,.01)
+  global_scale_tau_2 ~ dgamma(.01,.01)
+    
+  global_precision_mu_1 ~ dgamma(.01,.01)
+  global_precision_mu_2 ~ dgamma(.01,.01)
+    
+  global_precision_tau_1 ~ dgamma(.01,.01)
+  global_precision_tau_2 ~ dgamma(.01,.01)
+  
+  global_shift_mu_1_tmp ~ dbeta(1,1)
+  global_shift_mu_1 <- global_shift_mu_1_tmp - .5
+  global_shift_mu_2 ~ dgamma(.01,.01)
+    
+  global_shift_tau_1 ~ dgamma(.01,.01)
+  global_shift_tau_2 ~ dgamma(.01,.01)
+  
+  eps <- .0001
+  
+  for(g in 1:4) {
+    
+    # The two-parameter calibration function has a scale parameter (delta) that correponds
+    # to the "squashing" of the function towards a reference value...
+    group_scale_mu[g] ~ dnorm(global_scale_mu_1, global_scale_mu_2 + eps)T(0,1)
+    group_scale_tau[g] ~ dnorm(global_scale_tau_1, global_scale_tau_2 + eps)T(0,)
+
+    # ... and a "shift" parameter that indicates how far that reference value deviates from .5
+    group_shift_mu[g] ~ dnorm(global_shift_mu_1, global_shift_mu_2 + eps)T(-.5,.5)
+    group_shift_tau[g] ~ dnorm(global_shift_tau_1, global_shift_tau_2 + eps)T(0,)
+    
+    # Similarly, each subpopulation has a precision parameter
+    group_precision_mu[g] ~ dnorm(global_precision_mu_1, global_precision_mu_2 + eps)T(0,)
+    group_precision_tau[g] ~ dnorm(global_precision_tau_1, global_precision_tau_2 + eps)T(0,)
+    
+
+  }
+
+  for(s in 1:nsubj) {
+
+    # The calibration-scale parameter for a particular subject is drawn from a normal 
+    # distribution, truncated to lie on the unit interval
+    scale[s] ~ dnorm(group_scale_mu[group[s]], group_scale_tau[group[s]] + eps)T(0,1)
+    
+    # The precision parameter parameter for a particular subject is similarly
+    # drawn from a truncated normal
+    precision[s] ~ dnorm(group_precision_mu[group[s]], group_precision_tau[group[s]] + eps)T(0,)
+    
+    # calibration-shift
+    shift[s] ~ dnorm(group_shift_mu[group[s]], group_shift_tau[group[s]] + eps)T(-.5,.5)
+    
+  }
+  
+  ### 3-parameter model for the response ###
+  
+  for(i in 1:nobs) {
+    
+    # Psi
+    psi[i] <- scale[id[i]] * (log(x[item[i]] / (1-x[item[i]]))) + log((.5+shift[id[i]])/(1-(.5+shift[id[i]])))
+
+    # Model prediction for subject s feature with frequency x
+    mu[i] <- exp(psi[i]) / (1+exp(psi[i]))
+
+    # Response follows (truncated) normal distribution with mean mu
+    y[i] ~ dnorm(mu[i], precision[id[i]])T(0,1)
+    
+  }
+  
+  
+  ### other useful quantities to track ###
+  
+  for(i in 1:nobs) {
+    obs_dev[i] <- (mu[i] - xt[item[i]])
+    obs_noise[i] <- (y[i] - mu[i])^2
+  }
+  
+  # bias-variance decomposition for each person
+  for(s in 1:nsubj) {
+    bias[s] <- sum(obs_dev^2 * equals(s,id)) # squared loss
+    noise[s] <- sum(obs_noise * equals(s,id)) # squared loss
+    calibration[s] <- sum(abs(obs_dev) * equals(s,id)) # not sure I need this for anything?
+  }
+  
+  # How close is the model to the ground truth?
+  err_x <- sum(abs(x-xt))
+  
+}
