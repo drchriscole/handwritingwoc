@@ -1,0 +1,102 @@
+---
+title: "Martire et al revisualisation"
+author: "Chris Cole"
+date: "23/04/2018"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# libraries
+library(ggplot2)
+
+# read data
+hw.dat = read.csv("handwriting2.csv")
+
+```
+
+Take the data on comparing handwriting experts vs novices.
+
+**Figure 1**
+
+Firstly let's re-plot Figure 1 with a better representation of the underlying data: boxplots. Much better than the original 'dynamite plots'.
+
+```{r boxplot, fig.height=14, fig.width=6}
+
+# create absolute error column and bin 'true' column into the five categories
+# note: using cut_number() as cut() doesn't get it right
+hw.dat = data.frame(hw.dat, 
+                    error = abs(hw.dat$est-hw.dat$true), 
+                    category = cut_number(hw.dat$true, 5, 
+                                          labels = c("1%","25%","50%", "75%", "99%")
+                                         )
+                    )
+
+
+# plot boxplots - reorder the x-axis to match paper order
+ggplot(na.omit(hw.dat), aes(x=Condition, y=error, fill = US)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  facet_grid(category ~ .) +
+  scale_x_discrete(limits=c("US HW Expert","Non-US HW Expert","US Novice","Non-US Novice"), 
+                   breaks=c("US HW Expert","Non-US HW Expert","US Novice","Non-US Novice"),
+                   labels=c("US\nExpert","Non-US\nExpert", "US\nNovice","Non-US\nNovice")) + 
+  ylab("Absolute Error") +
+  theme(legend.title=element_blank(), axis.title.x = element_blank())
+```
+Now we can see that the distributions are skewed towards lower errors and the range of values is large. Plus, it looks like there's little difference between the different groups apart from the "US Novice" group - it large increase of errors in the 1% and 99% subsets.
+
+**Distributions**
+
+How skewed are the distributions, then?
+
+
+```{r distplot1}
+
+ggplot(na.omit(hw.dat[hw.dat$Condition == "US Novice",]), 
+       aes(x=error)) +
+  geom_density() +
+  xlab("Absolute Error") +
+  scale_x_continuous(limits = c(-10,110),breaks=seq(0, 100, 20)) +
+  ggtitle("US Novice - whole dataset")
+       
+
+```
+
+The data for the "US Novices" is left skewed and this is similar across all the sets (See below).
+
+```{r}
+
+ggplot(na.omit(hw.dat), aes(x=error)) +
+  geom_density() +
+  xlab("Absolute Error") +
+  scale_x_continuous(limits = c(-10,110),breaks=seq(0, 100, 20)) +
+  ggtitle("Absolute Error - broken down by expertise") +
+  facet_grid(Condition ~ .)
+
+```
+
+```{r}
+USnovice.dat = hw.dat[hw.dat$Condition == "US Novice",]
+
+ggplot(na.omit(USnovice.dat), aes(x=est)) + 
+  geom_density() + 
+  scale_x_continuous(limits = c(-10,110)) +
+  facet_grid(category ~ .) +
+  ggtitle("US Novice - broken down by subset")
+
+# ggplot(na.omit(USexpert.dat), aes(x = est)) + 
+#   geom_histogram(bins=30) +
+#   scale_x_continuous(limits = c(0,100)) +
+#   ggtitle("US Novice - Absolute Error")
+
+  
+#  geom_density() + 
+#  scale_x_continuous(limits = c(-10,110)) +
+  
+
+```
+
